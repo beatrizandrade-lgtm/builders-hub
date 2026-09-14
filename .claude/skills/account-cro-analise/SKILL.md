@@ -3,7 +3,7 @@ name: account-cro-analise
 description: Roda diagnostico de CRO (Conversion Rate Optimization) de landing page ou site puxando dados automaticos do Microsoft Clarity (rage click, dead click, quick back, excessive scroll, erros de script) e organizando o achado em hipoteses de teste priorizadas. Use sempre que o usuario pedir "analise de CRO", "por que a LP nao converte", "diagnostico de conversao", "o que ta travando no site/pagina", "otimizar taxa de conversao", mencionar Microsoft Clarity, rage click, dead click, ou quiser saber onde o usuario esta desistindo/travando numa pagina — mesmo sem falar "CRO" explicitamente.
 area: account
 author: beatrizandrade-lgtm
-version: 1.0.0
+version: 1.1.0
 ---
 
 # /account-cro-analise
@@ -74,16 +74,44 @@ Metricas de friccao confirmadas e uteis pro diagnostico (a API pode devolver out
 - **QuickbackClick** — usuario entra numa pagina e volta rapido → conteudo nao entregou o que o anuncio/link prometeu (falta de congruencia mensagem→pagina)
 - **ExcessiveScroll** — rolagem excessiva/erratica → usuario procurando algo que nao acha facilmente (hierarquia visual ruim ou informacao enterrada)
 - **ScriptErrorCount** — erro de JS na sessao → pode estar quebrando formulario, tracking ou elemento interativo sem o usuario nem saber reportar
+- **ErrorClickCount** — clique que dispara erro de JS → diferente do dead click (que nao faz nada) e do script error (que pode acontecer sem interacao): aqui o usuario **agiu e a acao quebrou**. Costuma ser o sinal mais grave dos tres, porque atinge quem estava tentando converter
 
 Se `sessionsWithMetricPercentage` de qualquer metrica de friccao vier alto (use bom senso: acima de ~15-20% ja e um sinal forte pra poucos dias de dado), isso e prioridade de investigacao.
 
+**Atencao ao denominador:** o `sessionsCount` que vem dentro de cada metrica de friccao e o total de sessoes **incluindo bots**, e o `sessionsWithMetricPercentage` ja vem calculado sobre essa base inflada. Se metade do trafego for bot, todo percentual de friccao chega ate voce diluido pela metade. Veja o proximo bloco antes de citar qualquer numero.
+
 Alem das metricas de friccao, a API tambem devolve metricas de contexto — use pra enriquecer o LIFT, nao ignore:
-- **Traffic** — repare em `totalBotSessionCount` vs `totalSessionCount`. **Sempre desconte bots antes de calcular qualquer percentual pro diagnostico ou pro cliente** (ex: se 111 sessoes totais e 56 sao bot, a base real de humanos e 55, nao 111 — recalcule os percentuais de friccao sobre essa base quando for citar numero pro cliente)
+- **Traffic** — repare em `totalBotSessionCount` vs `totalSessionCount`. **Sempre desconte bots antes de calcular qualquer percentual pro diagnostico ou pro cliente.** Bot nao tem rage click nem desiste de formulario: a friccao toda aconteceu na fatia humana, entao o percentual real e quase sempre **maior** do que o que a API devolve. Recalcule assim antes de citar qualquer numero:
+
+  ```
+  humanas        = totalSessionCount - totalBotSessionCount
+  sessoes_afetadas = round(sessionsWithMetricPercentage / 100 * sessionsCount)
+  pct_real       = sessoes_afetadas / humanas * 100
+  ```
+
+  Exemplo: 110 sessoes, 55 bots, `ScriptErrorCount` a 50,91%. A leitura ingenua e "metade das sessoes". A real e 56 sessoes afetadas sobre 55 humanas — ou seja, praticamente **toda** sessao humana bateu em erro de JS. O diagnostico muda de "vale investigar" pra "para tudo e conserta isso primeiro". Diga sempre qual base voce usou.
+
 - **ReferrerUrl / PopularPages** — de onde vem o trafego e pra onde ele vai; usa pra avaliar Relevancia (o que trouxe o clique bate com a pagina que ele caiu?)
 - **Browser / Device / OS** — se a friccao concentra num device/browser especifico, o problema pode ser tecnico (bug de renderizacao) e nao de copy/design
-- **ScrollDepth / EngagementTime** — apoiam o diagnostico de Distracao e Clareza (pouco tempo ativo + scroll raso = a pagina nao prendeu atencao)
+- **Country** — trafego concentrado fora do mercado do cliente costuma ser bot ou midia mal segmentada; cruze com `totalBotSessionCount` antes de tratar como publico real
+- **ScrollDepth / EngagementTime** — apoiam o diagnostico de Distracao e Clareza. Em `EngagementTime`, olhe a **razao `activeTime / totalTime`**, nao o tempo absoluto: se o usuario ficou 175s na pagina mas so 44s ativos (~25%), ele nao estava lendo — estava parado, perdido ou em outra aba. Tempo alto com atividade baixa e sinal de Clareza ruim, nao de engajamento
 
-**Cuidado com `PageTitle`:** o export do Clarity as vezes corrompe acentuacao em PT-BR (aparece `�` no lugar de ç, ã, é etc — ex: "solu��o" em vez de "solução"). Isso e um problema no proprio export da Microsoft, nao tem conserto do nosso lado. **Nunca cole o `PageTitle` bruto num relatorio pro cliente** — use a URL (`PopularPages`/`ReferrerUrl`) ou peca a URL real da pagina pra descrever a secao.
+### Schema real do retorno — confira a chave antes de parsear
+
+Cada metrica traz `information` com chaves **diferentes**. Errar a chave devolve vazio em silencio, sem erro:
+
+| Metrica | Chaves dentro de `information` |
+|---|---|
+| Friccao (todas) | `sessionsCount` · `sessionsWithMetricPercentage` · `pagesViews` · `subTotal` |
+| `Traffic` | `totalSessionCount` · `totalBotSessionCount` · `distinctUserCount` · `pagesPerSessionPercentage` |
+| `PopularPages` | `url` · `visitsCount` |
+| `PageTitle` / `ReferrerUrl` / `Browser` / `Device` / `OS` / `Country` | `name` · `sessionsCount` |
+| `ScrollDepth` | `averageScrollDepth` |
+| `EngagementTime` | `totalTime` · `activeTime` |
+
+Repare que `PopularPages` e a excecao: usa `url`/`visitsCount` enquanto as vizinhas usam `name`/`sessionsCount`.
+
+**Cuidado com `PageTitle`:** o export do Clarity corrompe acentuacao em PT-BR — o titulo chega na chave `name` com `�` no lugar de ç, ã, é (ex: `"A solu��o em containers"`). Ja foi confirmado em projeto real, nao e caso isolado. E problema do proprio export da Microsoft, sem conserto do nosso lado. **Nunca cole o `PageTitle` bruto num relatorio pro cliente** — use a URL (`PopularPages.url`) ou peca a URL real da pagina pra descrever a secao.
 
 ## Passo 4 — Cruzar com outras fontes (opcional, nao trava se faltar)
 
