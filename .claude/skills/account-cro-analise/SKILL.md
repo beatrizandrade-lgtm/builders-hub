@@ -50,11 +50,17 @@ O token fica em `squads/<squad>/clientes/<cliente>/.env`, chave `CLARITY_API_TOK
 
 ## Passo 3 — Puxar os dados
 
-Use o script `scripts/fetch_clarity.py` (nao reescreva a chamada de API na mao — ele ja trata erro de token invalido e limite de dias):
+Use o script `fetch_clarity.py` que vem junto com esta skill (nao reescreva a chamada de API na mao — ele ja trata erro de token invalido e limite de dias).
+
+O caminho e relativo a **raiz do repositorio**, nao a pasta da skill:
 
 ```bash
-python scripts/fetch_clarity.py --env-file "squads/<squad>/clientes/<cliente>/.env" --days 3
+python .claude/skills/account-cro-analise/scripts/fetch_clarity.py \
+  --env-file "squads/<squad>/clientes/<cliente>/.env" \
+  --days 3
 ```
+
+Se estiver rodando no Anti-Gravity, troque `.claude/` por `.agents/` — o conteudo e identico.
 
 Isso devolve uma lista de metricas no formato:
 ```json
@@ -124,7 +130,7 @@ Se o usuario pedir versao HTML pra apresentar ao cliente, **nao crie um layout d
 
 **Comportamento esperado:**
 1. Confirma qual cliente/squad, confere `.env` pra `CLARITY_API_TOKEN`
-2. Roda `scripts/fetch_clarity.py --days 3`
+2. Roda `python .claude/skills/account-cro-analise/scripts/fetch_clarity.py --days 3` a partir da raiz do repo
 3. Le `CLAUDE.md` do cliente pra pegar objetivo/persona da LP
 4. Opcionalmente cruza com `v4mos-dados-meta-ads` pra ver se o trafego que chega e o publico certo
 5. Devolve diagnostico LIFT + tabela PXL com 3-6 hipoteses priorizadas, avisando que os dados cobrem so os ultimos dias
